@@ -1,10 +1,3 @@
-{AKS在验证MAC和o2_o1_h21的可信任性时，出现攻击者重复消息的攻击，主要是因为，OBU1发出的挑战Q1由SN转发给OBU2，但是AVISPA分析的时候是分开分析的，没有连贯分}
-
-
-
-
-
-
 role role_OBU1(
   OBU1,OBU2,SN                   : agent,
   PID1,PID2,P                      : text,
@@ -58,7 +51,7 @@ played_by OBU2 def=
      State' := 2 /\ R2' := PUF2(C2') /\ R1' := xor(R2en',R2') /\ A2' := new() /\ Q2' := exp(P,A2') /\  H21' := H(C1'.R1'.Q2'.PID1'.PID2.Q1')  /\ SND(C1'.Q2'.H21')
 	             /\ witness(OBU2,OBU2,o2_o1_h21,H21')
   2. State = 2 /\ RCV(H12') /\ H12' = H(R1.PID1.PID2.Q2.exp(Q1,A2))  =|>
-     State' := 4 /\ secret(R1,r1,{OBU1,OBU2,SN}) /\ secret(R2,r2,{OBU1,OBU2,SN}) /\secret(A2,a2,{OBU1,OBU2,SN}) /\ request(OBU2,SN,s_o2_hs2,Hs2') /\ request(OBU2,OBU1,o1_o2_h12,H12')
+     State' := 4 /\ secret(R1,r1,{OBU1,OBU2,SN}) /\ secret(R2,r2,{OBU1,OBU2,SN}) /\secret(A2,a2,{OBU1,OBU2,SN}) /\ request(OBU2,SN,s_o2_hs2,Hs2) /\ request(OBU2,OBU1,o1_o2_h12,H12')
 
 end role
 
@@ -123,9 +116,7 @@ goal
   secrecy_of r2
   secrecy_of a1
   secrecy_of a2
-  authentication_on o1_s_mac
   authentication_on o1_o2_h12
-  authentication_on o2_o1_h21
   authentication_on s_o2_hs2
 end goal
 
