@@ -1,0 +1,132 @@
+{AKS在验证MAC和o2_o1_h21的可信任性时，出现攻击者重复消息的攻击，主要是因为，OBU1发出的挑战Q1由SN转发给OBU2，但是AVISPA分析的时候是分开分析的，没有连贯分}
+
+
+
+
+
+
+role role_OBU1(
+  OBU1,OBU2,SN                   : agent,
+  PID1,PID2,P                      : text,
+  H,PUF1                : hash_func,
+  SND,RCV                  : channel(dy))
+played_by OBU1 def=
+  
+  local
+    State        :nat,
+	A1,C1        :text,
+	H12,S,Q1,Q2,Q2en,Key,R1         :message,
+	MAC        :hash(text.text.message),
+	H21        :hash(text.message.message.text.text.message)
+%%	H12        :hash(message.text.text.message.message)
+
+  init
+    State := 0
+
+  transition
+  
+  1. State = 0 /\ RCV(start) =|>
+     State' := 2 /\ A1' := new() /\ Q1' := exp(P,A1')/\ MAC' := H(PID1.PID2.Q1')  /\ SND(PID1.PID2.Q1'.MAC') 
+	             /\ witness(OBU1,SN,o1_s_mac,MAC')
+  2. State = 2 /\ RCV(C1'.Q2'.H21')  /\ H21' = H(C1'.PUF1(C1').Q2'.PID1.PID2.Q1) =|>
+     State' := 4  /\ R1' := PUF1(C1') /\ Key' := exp(Q2',A1) /\ H12' := H(R1'.PID1.PID2.Q2'.Key') /\ SND(H12')
+	             /\ witness(OBU1,OBU2,o1_o2_h12,H12') /\ request(OBU1,OBU2,o2_o1_h21,H21') /\ secret(A1,a1,{OBU1,OBU2,SN}) /\ secret(R1',r1,{OBU1,OBU2,SN})
+
+end role
+
+role role_OBU2(
+  OBU1,OBU2,SN                   : agent,
+  PID2,P                      : text,
+  H,PUF2                : hash_func,
+  SND,RCV                  : channel(dy))
+played_by OBU2 def=
+  
+  local
+    State        :nat,
+	C1,C2,PID1,A2        :text,
+	H12,S,Q1,Q2,R1,R2,S1,R2en,Key         :message,
+	Hs2        :hash(text.text.message.text.message.message),
+	H21        :hash(text.message.message.text.text.message)
+%%	H12        :hash(message.text.text.message.message)
+
+  init
+    State := 0
+
+  transition
+  
+  1. State = 0 /\ RCV(PID1'.C1'.C2'.R2en'.Q1'.Hs2') /\ Hs2' = H(C1'.C2'.R2en'.PID1'.PUF2(C2').Q1') =|>
+     State' := 2 /\ R2' := PUF2(C2') /\ R1' := xor(R2en',R2') /\ A2' := new() /\ Q2' := exp(P,A2') /\  H21' := H(C1'.R1'.Q2'.PID1'.PID2.Q1')  /\ SND(C1'.Q2'.H21')
+	             /\ witness(OBU2,OBU2,o2_o1_h21,H21')
+  2. State = 2 /\ RCV(H12') /\ H12' = H(R1.PID1.PID2.Q2.exp(Q1,A2))  =|>
+     State' := 4 /\ secret(R1,r1,{OBU1,OBU2,SN}) /\ secret(R2,r2,{OBU1,OBU2,SN}) /\secret(A2,a2,{OBU1,OBU2,SN}) /\ request(OBU2,SN,s_o2_hs2,Hs2') /\ request(OBU2,OBU1,o1_o2_h12,H12')
+
+end role
+
+
+
+role role_SN(
+  OBU1,OBU2,SN                   : agent,
+  PID1,PID2,C1,C2,P                   : text,
+  H,PUF1,PUF2                : hash_func,
+  SND,RCV                  : channel(dy))
+played_by SN def=
+  
+  local
+    State        :nat,
+	PID1n,PID2n        :text,
+	Q1,R1,R2,R2en         :message,
+	MAC        :hash(text.text.message),
+	Hs2        :hash(text.text.message.text.message.message)
+
+	
+  init
+    State := 1
+
+  transition
+  
+  1. State = 1 /\ RCV(PID1n'.PID2n'.Q1'.MAC') /\ PID1n' = PID1 /\ PID2n' = PID2 /\ MAC' = H(PID1n'.PID2n'.Q1') =|>
+     State' := 3 /\ R1' := PUF1(C1) /\ R2' := PUF2(C2) /\ R2en' := xor(R1',R2') /\ Hs2' := H(C1.C2.R2en'.PID1.R2'.Q1') /\ SND(PID1.C1.C2.R2en'.Q1'.Hs2') 
+	             /\ witness(SN,OBU2,s_o2_hs2,Hs2') /\ request(SN,OBU1,o1_s_mac,MAC') /\ secret(R1,r1,{OBU1,OBU2,SN}) /\ secret(R2,r2,{OBU1,OBU2,SN})
+
+end role
+
+
+role session(
+  OBU1,OBU2,SN               : agent,
+  PID1,PID2,C1,C2,P          : text,
+  H,PUF1,PUF2                : hash_func)
+def=
+  local SO,SS,RO,RS : channel(dy)
+  
+  composition
+    role_OBU1(OBU1,OBU2,SN,PID1,PID2,P,H,PUF1,SO,RO) /\ role_OBU2(OBU1,OBU2,SN,PID2,P,H,PUF2,SO,RO) /\ role_SN(OBU1,OBU2,SN,PID1,PID2,C1,C2,P,H,PUF1,PUF2,SS,RS) 
+
+end role
+
+role environment()
+def=
+  
+  const
+    r1,r2,a1,a2,o1_s_mac,o1_o2_h12,o2_o1_h21,s_o2_hs2  :protocol_id,
+    obu1,obu2,sn        : agent,
+    pid1,pid2,c1,c2,p   : text,
+    h,puf1,puf2        : hash_func
+  intruder_knowledge = {pid1,pid2,obu1,obu2,sn,h} 
+  
+  composition
+    session(obu1,obu2,sn,pid1,pid2,c1,c2,p,h,puf1,puf2) 
+
+end role
+
+goal 
+  secrecy_of r1
+  secrecy_of r2
+  secrecy_of a1
+  secrecy_of a2
+  authentication_on o1_s_mac
+  authentication_on o1_o2_h12
+  authentication_on o2_o1_h21
+  authentication_on s_o2_hs2
+end goal
+
+environment()

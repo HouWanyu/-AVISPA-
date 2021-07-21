@@ -1,0 +1,102 @@
+role role_OBU(
+  OBU,SN                   : agent,
+  Kseaf                    : symmetric_key,
+  PID                      : text,
+  H1,H2,PUF                : hash_func,
+  SND,RCV                  : channel(dy))
+played_by OBU def=
+  
+  local
+    State        :nat,
+	C1,C2,T        :text,
+	H12,PID2,R1,R2,R1en,S1,R2en         :message,
+	H11          :hash(text.text.message.text.message),
+%%	H12          :hash(message.text.message.text.message),
+	Res          :hash(message.message)	
+  init
+    State := 0
+
+  transition
+  
+  1. State = 0 /\ RCV(start) =|>
+     State' := 2 /\ SND(PID) 
+  2. State = 2 /\ RCV(C2'.C1'.R1en'.H11')  /\ H11' = H1(C2'.C1'.PUF(C1').PID.R1en') =|>
+     State' := 4 /\ R1' := PUF(C1') /\ R2' := PUF(C2') /\ R2en' := xor(R1',R2') /\ H12' := H1(R1'.C2'.R2'.PID) /\ SND(R2en'.H12')
+	             /\ witness(OBU,SN,o_s_h12,H12')
+  3. State = 4 /\ RCV(PID2'.Res') /\ Res' = H1(PID2'.R2)=|>
+     State' := 6 /\ secret(R1,r1,{OBU,SN}) /\ secret(R2,r2,{OBU,SN}) /\ secret(S1,s1,{OBU,SN}) /\ request(OBU,SN,s_o_res,Res') /\ request(OBU,SN,s_o_h11,H11)
+
+end role
+
+role role_SN(
+  OBU,SN                   : agent,
+  Kseaf                   : symmetric_key,
+  PID,C1                   : text,
+  H1,H2,PUF                : hash_func,
+  SND,RCV                  : channel(dy))
+played_by SN def=
+  
+  local
+    State        :nat,
+	C2,PIDn,T        :text,
+	H12,PID2,R1,R2,S1,R1en,R2en         :message,
+	H11          :hash(text.text.message.text.message),
+%%	H12          :hash(message.text.message.text.message),
+	Res          :hash(message.message)
+
+	
+  init
+    State := 1
+
+  transition
+  
+  1. State = 1 /\ RCV(PIDn') /\ PIDn' = PID =|>
+     State' := 3 /\ R1' := PUF(C1) /\ C2' := new() /\ R1en' := H1(C2',R1') /\ H11' := H1(C2'.C1.R1'.PIDn'.R1en') /\ SND(C2'.C1.R1en'.H11') 
+	             /\ witness(SN,OBU,s_o_h11,H11')
+  2. State = 3 /\ RCV(R2en'.H12') /\ H12' = H1(R1.C2.xor(R2en',R1).PIDn) =|>
+     State' := 5 /\ R2' := xor(R2en',R1) /\ T' := new() /\ PID2' := H1(PID.Kseaf.R2'.T) /\ Res' := H1(PID2'.R2') /\ SND(PID2'.Res')
+	             /\ witness(SN,OBU,s_o_res,Res') /\ secret(R1,r1,{OBU,SN}) /\ secret(R2,r2,{OBU,SN}) /\ secret(S1,s1,{OBU,SN})
+
+end role
+
+
+role session(
+  OBU,SN                   : agent,
+  Kseaf                   : symmetric_key,
+  PID,C1                   : text,
+  H1,H2,PUF                : hash_func)
+def=
+  local SO,SS,RO,RS : channel(dy)
+  
+  composition
+    role_OBU(OBU,SN,Kseaf,PID,H1,H2,PUF,SO,RO) /\ role_SN(OBU,SN,Kseaf,PID,C1,H1,H2,PUF,SS,RS) 
+
+end role
+
+role environment()
+def=
+  
+  const
+    r1,r2,s1,s2,s_o_res,o_s_h12,s_o_h11  :protocol_id,
+    obu,sn     : agent,
+	kseaf       : symmetric_key,
+    pid,c1   : text,
+    h1,h2,puf        : hash_func
+  intruder_knowledge = {pid,obu,sn,h1,h2} 
+  
+  composition
+    session(obu,sn,kseaf,pid,c1,h1,h2,puf) 
+
+end role
+
+goal 
+  secrecy_of r1
+  secrecy_of r2
+  secrecy_of s1
+  secrecy_of s2
+  authentication_on s_o_res
+  authentication_on o_s_h12
+  authentication_on s_o_h11
+end goal
+
+environment()
